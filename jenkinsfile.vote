@@ -1,0 +1,53 @@
+pipeline {
+
+    agent {
+        label 'docker-agent'
+   }
+
+    environment {
+        IMAGE_NAME = "menalee/vote"
+    }
+
+    stages {
+
+        stage('Checkout') {
+            steps {
+                checkout scm
+            }
+        }
+
+        stage('Build Image') {
+            steps {
+                script {
+                    env.GIT_SHA = sh(
+                        script: "git rev-parse --short HEAD",
+                        returnStdout: true
+                    ).trim()
+
+                    sh """
+                    docker build \
+                    -t ${IMAGE_NAME}:${GIT_SHA} \
+                    ./vote
+                    """
+                }
+            }
+        }
+
+        stage('Push Image') {
+            steps {
+                sh """
+                docker push ${IMAGE_NAME}:${GIT_SHA}
+                """
+            }
+        }
+
+        stage('Deploy Vote') {
+            steps {
+                sh """
+                cd vote
+                docker compose up -d
+                """
+            }
+        }
+    }
+}

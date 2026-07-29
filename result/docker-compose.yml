@@ -1,0 +1,13 @@
+services:
+
+  vote:
+    image: menalee/result:63e9150
+    container_name: result
+    ports:
+      - "8081:80"
+    networks:
+      - votingresult
+
+networks:
+  votingresult:
+    external: true

@@ -1,0 +1,11 @@
+services:
+
+  vote:
+    image: menalee/worker:63e9150
+    container_name: worker
+    networks:
+      - votingresult
+
+networks:
+  votingresult:
+    external: true
