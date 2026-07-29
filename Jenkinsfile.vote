@@ -2,7 +2,7 @@ pipeline {
 
     agent {
         label 'docker-agent'
-   }
+    }
 
     environment {
         IMAGE_NAME = "menalee/vote"
@@ -16,38 +16,78 @@ pipeline {
             }
         }
 
-        stage('Build Image') {
+        stage('Get Git Commit SHA') {
             steps {
                 script {
                     env.GIT_SHA = sh(
-                        script: "git rev-parse --short HEAD",
+                        script: 'git rev-parse --short HEAD',
                         returnStdout: true
                     ).trim()
 
-                    sh """
-                    docker build \
-                    -t ${IMAGE_NAME}:${GIT_SHA} \
-                    ./vote
-                    """
+                    echo "Building image with tag: ${GIT_SHA}"
                 }
             }
         }
 
-        stage('Push Image') {
+        stage('Build Docker Image') {
             steps {
                 sh """
-                docker push ${IMAGE_NAME}:${GIT_SHA}
+                    docker build \
+                    -t ${IMAGE_NAME}:${GIT_SHA} \
+                    ./vote
                 """
             }
         }
 
-        stage('Deploy Vote') {
+        stage('Docker Login') {
+            steps {
+                withCredentials([usernamePassword(
+                    credentialsId: 'dockerhub-creds',
+                    usernameVariable: 'DOCKER_USERNAME',
+                    passwordVariable: 'DOCKER_PASSWORD'
+                )]) {
+                    sh '''
+                        echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin
+                    '''
+                }
+            }
+        }
+
+        stage('Push Docker Image') {
             steps {
                 sh """
-                cd vote
-                docker compose up -d
+                    docker push ${IMAGE_NAME}:${GIT_SHA}
                 """
             }
+        }
+
+        stage('Deploy Vote Service') {
+            steps {
+                sh """
+                    cd vote
+                    IMAGE_TAG=${GIT_SHA} docker compose up -d
+                """
+            }
+        }
+
+        stage('Verify Deployment') {
+            steps {
+                sh 'docker ps'
+            }
+        }
+    }
+
+    post {
+        always {
+            sh 'docker logout || true'
+        }
+
+        success {
+            echo 'Vote service deployed successfully.'
+        }
+
+        failure {
+            echo 'Vote service deployment failed.'
         }
     }
 }

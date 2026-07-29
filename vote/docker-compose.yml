@@ -1,7 +1,6 @@
 services:
-
   vote:
-    image: menalee/vote:63e9150
+    image: menalee/vote:${IMAGE_TAG}
     container_name: vote
     ports:
       - "8080:80"
