@@ -1,0 +1,93 @@
+pipeline {
+
+    agent {
+        label 'docker-agent'
+    }
+
+    environment {
+        IMAGE_NAME = "menalee/worker"
+    }
+
+    stages {
+
+        stage('Checkout') {
+            steps {
+                checkout scm
+            }
+        }
+
+        stage('Get Git Commit SHA') {
+            steps {
+                script {
+                    env.GIT_SHA = sh(
+                        script: 'git rev-parse --short HEAD',
+                        returnStdout: true
+                    ).trim()
+
+                    echo "Building image with tag: ${GIT_SHA}"
+                }
+            }
+        }
+
+        stage('Build Docker Image') {
+            steps {
+                sh """
+                    docker build \
+                    -t ${IMAGE_NAME}:${GIT_SHA} \
+                    ./worker
+                """
+            }
+        }
+
+        stage('Docker Login') {
+            steps {
+                withCredentials([usernamePassword(
+                    credentialsId: 'dockerhub-creds',
+                    usernameVariable: 'DOCKER_USERNAME',
+                    passwordVariable: 'DOCKER_PASSWORD'
+                )]) {
+                    sh '''
+                        echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin
+                    '''
+                }
+            }
+        }
+
+        stage('Push Docker Image') {
+            steps {
+                sh """
+                    docker push ${IMAGE_NAME}:${GIT_SHA}
+                """
+            }
+        }
+
+        stage('Deploy Worker Service') {
+            steps {
+                sh """
+                    cd worker
+                    IMAGE_TAG=${GIT_SHA} docker compose up -d
+                """
+            }
+        }
+
+        stage('Verify Deployment') {
+            steps {
+                sh 'docker ps'
+            }
+        }
+    }
+
+    post {
+        always {
+            sh 'docker logout || true'
+        }
+
+        success {
+            echo 'Worker service deployed successfully.'
+        }
+
+        failure {
+            echo 'Worker service deployment failed.'
+        }
+    }
+}
