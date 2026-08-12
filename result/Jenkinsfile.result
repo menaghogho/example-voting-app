@@ -1,7 +1,7 @@
 pipeline {
 
     agent {
-        label 'Prod_agents'
+        label 'Prod_agent'
     }
 
     environment {
